@@ -6,7 +6,7 @@ import { useMemo, useState } from 'react'
    la vraie route de paiement de ton backend une fois confirmée.
    ============================================================ */
 const API_BASE = 'https://tiozang-paiement-campay-production.up.railway.app'
-const PAYMENT_ENDPOINT = `${API_BASE}/api/payment/initiate`
+const PAYMENT_ENDPOINT = `${API_BASE}/api/payer`
 
 /* Mot de passe simple pour l'espace vendeur (démo locale).
    À remplacer plus tard par une vraie authentification côté backend. */
