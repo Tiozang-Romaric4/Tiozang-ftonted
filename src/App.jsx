@@ -1,4 +1,3 @@
-
 import { useMemo, useState } from 'react'
 
 /* ============================================================
@@ -11,6 +10,8 @@ const ADMIN_PASSWORD = 'tiozang2026'
 
 /* ============================================================
    DONNÉES PRODUITS
+   (plus de prix par modèle : le prix est désormais global,
+   basé sur le nombre total de t-shirts dans le panier)
    ============================================================ */
 const SIZES = ['S', 'M', 'L', 'XL', 'XXL']
 
@@ -21,7 +22,6 @@ const INITIAL_PRODUCTS = [
     slogan: '237',
     color: '#15120F',
     textColor: '#F2EDE2',
-    basePrice: 6000,
     desc: 'Coupe régulière, coton épais, impression sérigraphiée.',
   },
   {
@@ -30,7 +30,6 @@ const INITIAL_PRODUCTS = [
     slogan: 'ON GÈRE',
     color: '#E8590C',
     textColor: '#15120F',
-    basePrice: 6000,
     desc: 'Orange signature TIOZANG, message direct, finition mate.',
   },
   {
@@ -39,7 +38,6 @@ const INITIAL_PRODUCTS = [
     slogan: 'SANS\nPRESSION',
     color: '#F2EDE2',
     textColor: '#15120F',
-    basePrice: 6500,
     desc: 'Fond clair, idéal pour un look propre au quotidien.',
   },
   {
@@ -48,25 +46,26 @@ const INITIAL_PRODUCTS = [
     slogan: 'MBOA',
     color: '#2F6F4E',
     textColor: '#F2EDE2',
-    basePrice: 6500,
     desc: 'Vert profond, pour porter le pays sur les épaules.',
   },
 ]
 
+/* Paliers de prix sur le TOTAL de t-shirts du panier (tous modèles confondus) */
 const TIERS = [
-  { min: 1, max: 4, label: '1 – 4', discount: 0 },
-  { min: 5, max: 9, label: '5 – 9', discount: 0.1 },
-  { min: 10, max: 19, label: '10 – 19', discount: 0.2 },
-  { min: 20, max: Infinity, label: '20+', discount: 0.3 },
+  { min: 1, max: 2, label: '1 – 2', price: 4500 },
+  { min: 3, max: 5, label: '3 – 5', price: 4000 },
+  { min: 6, max: 9, label: '6 – 9', price: 3800 },
+  { min: 10, max: Infinity, label: '10+', price: 3600 },
 ]
 
 function tierFor(quantity) {
   return TIERS.find((t) => quantity >= t.min && quantity <= t.max) ?? TIERS[0]
 }
 
-function unitPrice(basePrice, quantity) {
-  const tier = tierFor(quantity)
-  return Math.round(basePrice * (1 - tier.discount))
+/* Prix unitaire applicable à TOUT le panier, selon le total de t-shirts */
+function globalUnitPrice(totalQuantity) {
+  if (totalQuantity <= 0) return TIERS[0].price
+  return tierFor(totalQuantity).price
 }
 
 function formatFCFA(n) {
@@ -157,13 +156,14 @@ function TierBoard() {
   return (
     <section className="tier-board" aria-label="Grille tarifaire par quantité">
       <h2 className="section-title">Le prix baisse, la quantité monte</h2>
+      <p className="hero-sub">
+        Le palier s'applique sur le total de t-shirts dans ton panier, tous modèles confondus.
+      </p>
       <div className="tier-row">
         {TIERS.map((t) => (
           <div className="tier-tag" key={t.label}>
             <span className="tier-qty">{t.label}</span>
-            <span className="tier-discount">
-              {t.discount === 0 ? 'Prix plein' : `-${Math.round(t.discount * 100)}%`}
-            </span>
+            <span className="tier-discount">{formatFCFA(t.price)} / unité</span>
           </div>
         ))}
       </div>
@@ -174,11 +174,12 @@ function TierBoard() {
 /* ============================================================
    CARTE PRODUIT
    ============================================================ */
-function ProductCard({ product, onAdd }) {
+function ProductCard({ product, onAdd, cartCount }) {
   const [size, setSize] = useState('M')
   const [quantity, setQuantity] = useState(1)
 
-  const price = unitPrice(product.basePrice, quantity)
+  /* Aperçu du prix unitaire SI ce produit est ajouté au panier actuel */
+  const previewPrice = globalUnitPrice(cartCount + quantity)
 
   return (
     <article className="product-card">
@@ -210,7 +211,7 @@ function ProductCard({ product, onAdd }) {
       </div>
 
       <div className="product-price-row">
-        <span className="price-tag">{formatFCFA(price)} / unité</span>
+        <span className="price-tag">{formatFCFA(previewPrice)} / unité*</span>
         <button
           className="add-btn"
           onClick={() => onAdd({ productId: product.id, size, quantity })}
@@ -218,6 +219,9 @@ function ProductCard({ product, onAdd }) {
           Ajouter au panier
         </button>
       </div>
+      <p className="product-desc" style={{ fontSize: '0.75rem', opacity: 0.7 }}>
+        *Prix estimé si ajouté maintenant — recalculé sur le total réel de ton panier.
+      </p>
     </article>
   )
 }
@@ -227,12 +231,8 @@ function ProductCard({ product, onAdd }) {
    ============================================================ */
 function CartDrawer({ open, onClose, items, products, onRemove, onCheckout }) {
   const totalQty = items.reduce((sum, it) => sum + it.quantity, 0)
-
-  const total = items.reduce((sum, it) => {
-    const product = products.find((p) => p.id === it.productId)
-    if (!product) return sum
-    return sum + unitPrice(product.basePrice, it.quantity) * it.quantity
-  }, 0)
+  const unitPrice = globalUnitPrice(totalQty)
+  const total = unitPrice * totalQty
 
   return (
     <div className={`drawer ${open ? 'drawer-open' : ''}`} aria-hidden={!open}>
@@ -251,13 +251,12 @@ function CartDrawer({ open, onClose, items, products, onRemove, onCheckout }) {
             {items.map((it, idx) => {
               const product = products.find((p) => p.id === it.productId)
               if (!product) return null
-              const price = unitPrice(product.basePrice, it.quantity)
               return (
                 <li className="cart-item" key={idx}>
                   <div>
                     <p className="cart-item-name">{product.name}</p>
                     <p className="cart-item-meta">
-                      Taille {it.size} · ×{it.quantity} · {formatFCFA(price)} / unité
+                      Taille {it.size} · ×{it.quantity} · {formatFCFA(unitPrice)} / unité
                     </p>
                   </div>
                   <button className="link-btn" onClick={() => onRemove(idx)}>
@@ -268,7 +267,7 @@ function CartDrawer({ open, onClose, items, products, onRemove, onCheckout }) {
             })}
           </ul>
           <div className="cart-summary">
-            <span>{totalQty} article{totalQty > 1 ? 's' : ''}</span>
+            <span>{totalQty} article{totalQty > 1 ? 's' : ''} · {formatFCFA(unitPrice)}/unité</span>
             <span className="cart-total">{formatFCFA(total)}</span>
           </div>
           <button className="cta-btn cta-full" onClick={onCheckout}>
@@ -288,11 +287,9 @@ function CheckoutPanel({ open, onClose, items, products }) {
   const [status, setStatus] = useState('idle')
   const [errorMsg, setErrorMsg] = useState('')
 
-  const total = items.reduce((sum, it) => {
-    const product = products.find((p) => p.id === it.productId)
-    if (!product) return sum
-    return sum + unitPrice(product.basePrice, it.quantity) * it.quantity
-  }, 0)
+  const totalQty = items.reduce((sum, it) => sum + it.quantity, 0)
+  const unitPrice = globalUnitPrice(totalQty)
+  const total = unitPrice * totalQty
 
   async function handleSubmit(e) {
     e.preventDefault()
@@ -347,6 +344,9 @@ function CheckoutPanel({ open, onClose, items, products }) {
           <form onSubmit={handleSubmit} className="checkout-form">
             <h2>Finaliser la commande</h2>
             <p className="checkout-total">{formatFCFA(total)}</p>
+            <p style={{ fontSize: '0.8rem', opacity: 0.7, marginTop: '-0.5rem' }}>
+              {totalQty} t-shirt{totalQty > 1 ? 's' : ''} × {formatFCFA(unitPrice)}
+            </p>
 
             <label className="field">
               <span>Nom complet</span>
@@ -406,7 +406,7 @@ function CheckoutPanel({ open, onClose, items, products }) {
 function AdminPanel({ open, onClose, products, setProducts }) {
   const [authed, setAuthed] = useState(false)
   const [pwd, setPwd] = useState('')
-  const [draft, setDraft] = useState({ name: '', basePrice: '', desc: '', color: '#E8590C', slogan: '' })
+  const [draft, setDraft] = useState({ name: '', desc: '', color: '#E8590C', slogan: '' })
 
   if (!open) return null
 
@@ -417,7 +417,7 @@ function AdminPanel({ open, onClose, products, setProducts }) {
 
   function handleAddProduct(e) {
     e.preventDefault()
-    if (!draft.name || !draft.basePrice) return
+    if (!draft.name) return
     setProducts([
       ...products,
       {
@@ -426,11 +426,10 @@ function AdminPanel({ open, onClose, products, setProducts }) {
         slogan: draft.slogan || draft.name.toUpperCase(),
         color: draft.color,
         textColor: '#F2EDE2',
-        basePrice: Number(draft.basePrice),
         desc: draft.desc,
       },
     ])
-    setDraft({ name: '', basePrice: '', desc: '', color: '#E8590C', slogan: '' })
+    setDraft({ name: '', desc: '', color: '#E8590C', slogan: '' })
   }
 
   return (
@@ -477,15 +476,6 @@ function AdminPanel({ open, onClose, products, setProducts }) {
                 />
               </label>
               <label className="field">
-                <span>Prix unitaire (FCFA)</span>
-                <input
-                  required
-                  type="number"
-                  value={draft.basePrice}
-                  onChange={(e) => setDraft({ ...draft, basePrice: e.target.value })}
-                />
-              </label>
-              <label className="field">
                 <span>Couleur</span>
                 <input
                   type="color"
@@ -508,6 +498,7 @@ function AdminPanel({ open, onClose, products, setProducts }) {
             <p className="admin-note">
               ⚠️ Pour l'instant ces modèles ne sont visibles que sur cet appareil — ils seront
               perdus au rechargement. La prochaine étape sera de connecter cet espace au backend.
+              Le prix n'est plus défini par modèle : il dépend du total de t-shirts commandés.
             </p>
           </div>
         )}
@@ -552,7 +543,7 @@ export default function App() {
         <h2 className="section-title">La collection</h2>
         <div className="product-grid">
           {products.map((p) => (
-            <ProductCard key={p.id} product={p} onAdd={addToCart} />
+            <ProductCard key={p.id} product={p} onAdd={addToCart} cartCount={cartCount} />
           ))}
         </div>
       </section>
