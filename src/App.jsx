@@ -310,7 +310,7 @@ function CheckoutPanel({ open, onClose, items, products }) {
         body: JSON.stringify({
           amount: total,
           phone: form.phone,
-          operator: form.operator,
+         orderId: `TIOZANG-${Date.now()}`, 
           customerName: form.name,
           city: form.city,
           items,
