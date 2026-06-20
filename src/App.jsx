@@ -1,19 +1,16 @@
+
 import { useMemo, useState } from 'react'
 
 /* ============================================================
    CONFIGURATION
-   ⚠️ À adapter : remplace le chemin "/api/payment/initiate" par
-   la vraie route de paiement de ton backend une fois confirmée.
    ============================================================ */
 const API_BASE = 'https://tiozang-paiement-campay-production.up.railway.app'
 const PAYMENT_ENDPOINT = `${API_BASE}/api/payer`
 
-/* Mot de passe simple pour l'espace vendeur (démo locale).
-   À remplacer plus tard par une vraie authentification côté backend. */
 const ADMIN_PASSWORD = 'tiozang2026'
 
 /* ============================================================
-   DONNÉES PRODUITS (à remplacer par un vrai catalogue / API)
+   DONNÉES PRODUITS
    ============================================================ */
 const SIZES = ['S', 'M', 'L', 'XL', 'XXL']
 
@@ -56,7 +53,6 @@ const INITIAL_PRODUCTS = [
   },
 ]
 
-/* Paliers de prix par quantité — séquence réelle, donc numérotée */
 const TIERS = [
   { min: 1, max: 4, label: '1 – 4', discount: 0 },
   { min: 5, max: 9, label: '5 – 9', discount: 0.1 },
@@ -78,7 +74,7 @@ function formatFCFA(n) {
 }
 
 /* ============================================================
-   MOCKUP T-SHIRT EN SVG — élément signature de la marque
+   MOCKUP T-SHIRT EN SVG
    ============================================================ */
 function TshirtMockup({ color, textColor, slogan }) {
   const lines = slogan.split('\n')
@@ -232,7 +228,6 @@ function ProductCard({ product, onAdd }) {
 function CartDrawer({ open, onClose, items, products, onRemove, onCheckout }) {
   const totalQty = items.reduce((sum, it) => sum + it.quantity, 0)
 
-  /* Le palier s'applique par modèle, selon la quantité commandée de CE modèle */
   const total = items.reduce((sum, it) => {
     const product = products.find((p) => p.id === it.productId)
     if (!product) return sum
@@ -290,7 +285,7 @@ function CartDrawer({ open, onClose, items, products, onRemove, onCheckout }) {
    ============================================================ */
 function CheckoutPanel({ open, onClose, items, products }) {
   const [form, setForm] = useState({ name: '', phone: '', operator: 'MTN', city: '' })
-  const [status, setStatus] = useState('idle') // idle | loading | success | error
+  const [status, setStatus] = useState('idle')
   const [errorMsg, setErrorMsg] = useState('')
 
   const total = items.reduce((sum, it) => {
@@ -299,8 +294,7 @@ function CheckoutPanel({ open, onClose, items, products }) {
     return sum + unitPrice(product.basePrice, it.quantity) * it.quantity
   }, 0)
 
-  async function 
-async function handleSubmit(e) {
+  async function handleSubmit(e) {
     e.preventDefault()
     setStatus('loading')
     setErrorMsg('')
@@ -331,8 +325,83 @@ async function handleSubmit(e) {
       setErrorMsg(err.message || "Le paiement n'a pas pu démarrer. Réessaie.")
     }
   }
+
+  if (!open) return null
+
+  return (
+    <div className="modal-overlay" role="dialog" aria-modal="true">
+      <div className="modal">
+        <button className="icon-btn modal-close" onClick={onClose} aria-label="Fermer">
+          ✕
+        </button>
+
+        {status === 'success' ? (
+          <div className="status-block status-success">
+            <h2>Paiement initié</h2>
+            <p>Une demande de paiement Mobile Money a été envoyée. Confirme-la sur ton téléphone.</p>
+            <button className="cta-btn" onClick={onClose}>
+              Fermer
+            </button>
+          </div>
+        ) : (
+          <form onSubmit={handleSubmit} className="checkout-form">
+            <h2>Finaliser la commande</h2>
+            <p className="checkout-total">{formatFCFA(total)}</p>
+
+            <label className="field">
+              <span>Nom complet</span>
+              <input
+                required
+                value={form.name}
+                onChange={(e) => setForm({ ...form, name: e.target.value })}
+              />
+            </label>
+
+            <label className="field">
+              <span>Ville</span>
+              <input
+                required
+                value={form.city}
+                onChange={(e) => setForm({ ...form, city: e.target.value })}
+              />
+            </label>
+
+            <label className="field">
+              <span>Opérateur Mobile Money</span>
+              <select
+                value={form.operator}
+                onChange={(e) => setForm({ ...form, operator: e.target.value })}
+              >
+                <option value="MTN">MTN Mobile Money</option>
+                <option value="ORANGE">Orange Money</option>
+              </select>
+            </label>
+
+            <label className="field">
+              <span>Numéro Mobile Money</span>
+              <input
+                required
+                type="tel"
+                placeholder="6XXXXXXXX"
+                value={form.phone}
+                onChange={(e) => setForm({ ...form, phone: e.target.value })}
+              />
+            </label>
+
+            {status === 'error' && <p className="error-text">{errorMsg}</p>}
+
+            <button className="cta-btn cta-full" type="submit" disabled={status === 'loading'}>
+              {status === 'loading' ? 'Envoi en cours…' : 'Payer maintenant'}
+            </button>
+          </form>
+        )}
+      </div>
+    </div>
+  )
+}
+
 /* ============================================================
-   ESPACE VENDEUR (démo locale, à connecter au backend plus tard)
+   ESPACE VENDEUR
    ============================================================ */
 function AdminPanel({ open, onClose, products, setProducts }) {
   const [authed, setAuthed] = useState(false)
@@ -436,7 +505,16 @@ function AdminPanel({ open, onClose, products, setProducts }) {
               </button>
             </form>
 
-            
+            <p className="admin-note">
+              ⚠️ Pour l'instant ces modèles ne sont visibles que sur cet appareil — ils seront
+              perdus au rechargement. La prochaine étape sera de connecter cet espace au backend.
+            </p>
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
 
 /* ============================================================
    APP
