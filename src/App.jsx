@@ -8,10 +8,12 @@ const PAYMENT_ENDPOINT = `${API_BASE}/api/payer`
 
 const ADMIN_PASSWORD = 'tiozang2026'
 
+/* Numéro WhatsApp Business pour les demandes de devis.
+   ⚠️ Remplace ce numéro par le tien (format: 237XXXXXXXXX, sans le +) */
+const WHATSAPP_NUMBER = '237600000000'
+
 /* ============================================================
    DONNÉES PRODUITS
-   (plus de prix par modèle : le prix est désormais global,
-   basé sur le nombre total de t-shirts dans le panier)
    ============================================================ */
 const SIZES = ['S', 'M', 'L', 'XL', 'XXL']
 
@@ -50,7 +52,6 @@ const INITIAL_PRODUCTS = [
   },
 ]
 
-/* Paliers de prix sur le TOTAL de t-shirts du panier (tous modèles confondus) */
 const TIERS = [
   { min: 1, max: 2, label: '1 – 2', price: 4500 },
   { min: 3, max: 5, label: '3 – 5', price: 4000 },
@@ -62,7 +63,6 @@ function tierFor(quantity) {
   return TIERS.find((t) => quantity >= t.min && quantity <= t.max) ?? TIERS[0]
 }
 
-/* Prix unitaire applicable à TOUT le panier, selon le total de t-shirts */
 function globalUnitPrice(totalQuantity) {
   if (totalQuantity <= 0) return TIERS[0].price
   return tierFor(totalQuantity).price
@@ -71,6 +71,9 @@ function globalUnitPrice(totalQuantity) {
 function formatFCFA(n) {
   return `${n.toLocaleString('fr-FR')} FCFA`
 }
+
+const MIN_PRICE = TIERS[TIERS.length - 1].price
+const MAX_PRICE = TIERS[0].price
 
 /* ============================================================
    MOCKUP T-SHIRT EN SVG
@@ -101,6 +104,20 @@ function TshirtMockup({ color, textColor, slogan }) {
           </tspan>
         ))}
       </text>
+      {/* Signature TIOZANG, très discrète, en bas */}
+      <text
+        x="100"
+        y="196"
+        textAnchor="middle"
+        fontFamily="Montserrat, sans-serif"
+        fontWeight="700"
+        fontSize="4.5"
+        letterSpacing="1.5"
+        fill={textColor}
+        opacity="0.55"
+      >
+        TIOZANG
+      </text>
     </svg>
   )
 }
@@ -108,12 +125,26 @@ function TshirtMockup({ color, textColor, slogan }) {
 /* ============================================================
    EN-TÊTE
    ============================================================ */
-function Header({ cartCount, onCartClick, onAdminClick }) {
+function Header({ cartCount, query, onQueryChange, onCartClick, onAdminClick, onQuoteClick }) {
   return (
     <header className="header">
       <div className="header-inner">
         <span className="logo">TIOZANG</span>
+
+        <div className="header-search">
+          <input
+            type="search"
+            placeholder="Rechercher un modèle…"
+            value={query}
+            onChange={(e) => onQueryChange(e.target.value)}
+            aria-label="Rechercher un modèle de t-shirt"
+          />
+        </div>
+
         <nav className="header-actions">
+          <button className="link-btn" onClick={onQuoteClick}>
+            Demander un devis
+          </button>
           <button className="link-btn" onClick={onAdminClick}>
             Espace vendeur
           </button>
@@ -124,6 +155,26 @@ function Header({ cartCount, onCartClick, onAdminClick }) {
         </nav>
       </div>
     </header>
+  )
+}
+
+/* ============================================================
+   BADGES DE CONFIANCE
+   ============================================================ */
+function TrustBadges() {
+  const badges = [
+    { icon: '🔒', text: 'Paiement sécurisé Mobile Money' },
+    { icon: '✅', text: 'Vendeur vérifié TIOZANG' },
+    { icon: '🇨🇲', text: 'Imprimé au Cameroun' },
+  ]
+  return (
+    <section className="trust-badges" aria-label="Garanties">
+      {badges.map((b) => (
+        <span className="trust-badge" key={b.text}>
+          <span aria-hidden="true">{b.icon}</span> {b.text}
+        </span>
+      ))}
+    </section>
   )
 }
 
@@ -172,13 +223,37 @@ function TierBoard() {
 }
 
 /* ============================================================
+   FILTRE PAR COULEUR
+   ============================================================ */
+function FilterBar({ colors, activeColor, onSelect }) {
+  return (
+    <div className="filter-bar" role="group" aria-label="Filtrer par couleur">
+      <button
+        className={`filter-chip ${activeColor === null ? 'filter-chip-active' : ''}`}
+        onClick={() => onSelect(null)}
+      >
+        Tous les modèles
+      </button>
+      {colors.map((c) => (
+        <button
+          key={c}
+          className={`filter-chip ${activeColor === c ? 'filter-chip-active' : ''}`}
+          onClick={() => onSelect(c)}
+        >
+          <span className="filter-swatch" style={{ background: c }} />
+        </button>
+      ))}
+    </div>
+  )
+}
+
+/* ============================================================
    CARTE PRODUIT
    ============================================================ */
 function ProductCard({ product, onAdd, cartCount }) {
   const [size, setSize] = useState('M')
   const [quantity, setQuantity] = useState(1)
 
-  /* Aperçu du prix unitaire SI ce produit est ajouté au panier actuel */
   const previewPrice = globalUnitPrice(cartCount + quantity)
 
   return (
@@ -186,6 +261,10 @@ function ProductCard({ product, onAdd, cartCount }) {
       <TshirtMockup color={product.color} textColor={product.textColor} slogan={product.slogan} />
       <h3 className="product-name">{product.name}</h3>
       <p className="product-desc">{product.desc}</p>
+
+      <p className="price-range">
+        {formatFCFA(MIN_PRICE)} – {formatFCFA(MAX_PRICE)} / unité
+      </p>
 
       <div className="product-controls">
         <label className="field">
@@ -401,6 +480,105 @@ function CheckoutPanel({ open, onClose, items, products }) {
 }
 
 /* ============================================================
+   DEMANDE DE DEVIS
+   ============================================================ */
+function QuoteModal({ open, onClose, products }) {
+  const [form, setForm] = useState({ name: '', phone: '', productId: '', quantity: 10, message: '' })
+
+  if (!open) return null
+
+  function handleSubmit(e) {
+    e.preventDefault()
+    const product = products.find((p) => p.id === form.productId)
+    const lines = [
+      `Bonjour TIOZANG, je souhaite un devis :`,
+      `Nom : ${form.name}`,
+      `Téléphone : ${form.phone}`,
+      product ? `Modèle souhaité : ${product.name}` : null,
+      `Quantité estimée : ${form.quantity}`,
+      form.message ? `Message : ${form.message}` : null,
+    ].filter(Boolean)
+
+    const text = encodeURIComponent(lines.join('\n'))
+    window.open(`https://wa.me/${WHATSAPP_NUMBER}?text=${text}`, '_blank')
+    onClose()
+  }
+
+  return (
+    <div className="modal-overlay" role="dialog" aria-modal="true">
+      <div className="modal">
+        <button className="icon-btn modal-close" onClick={onClose} aria-label="Fermer">
+          ✕
+        </button>
+        <form onSubmit={handleSubmit} className="checkout-form">
+          <h2>Demander un devis</h2>
+          <p style={{ fontSize: '0.85rem', opacity: 0.75, marginTop: '-0.5rem' }}>
+            Pour une grosse commande ou une demande spéciale — on te répond directement sur WhatsApp.
+          </p>
+
+          <label className="field">
+            <span>Nom complet</span>
+            <input
+              required
+              value={form.name}
+              onChange={(e) => setForm({ ...form, name: e.target.value })}
+            />
+          </label>
+
+          <label className="field">
+            <span>Téléphone</span>
+            <input
+              required
+              type="tel"
+              placeholder="6XXXXXXXX"
+              value={form.phone}
+              onChange={(e) => setForm({ ...form, phone: e.target.value })}
+            />
+          </label>
+
+          <label className="field">
+            <span>Modèle souhaité (optionnel)</span>
+            <select
+              value={form.productId}
+              onChange={(e) => setForm({ ...form, productId: e.target.value })}
+            >
+              <option value="">— Choisir un modèle —</option>
+              {products.map((p) => (
+                <option key={p.id} value={p.id}>
+                  {p.name}
+                </option>
+              ))}
+            </select>
+          </label>
+
+          <label className="field">
+            <span>Quantité estimée</span>
+            <input
+              type="number"
+              min="1"
+              value={form.quantity}
+              onChange={(e) => setForm({ ...form, quantity: Math.max(1, Number(e.target.value) || 1) })}
+            />
+          </label>
+
+          <label className="field">
+            <span>Message (optionnel)</span>
+            <input
+              value={form.message}
+              onChange={(e) => setForm({ ...form, message: e.target.value })}
+            />
+          </label>
+
+          <button className="cta-btn cta-full" type="submit">
+            Envoyer sur WhatsApp
+          </button>
+        </form>
+      </div>
+    </div>
+  )
+}
+
+/* ============================================================
    ESPACE VENDEUR
    ============================================================ */
 function AdminPanel({ open, onClose, products, setProducts }) {
@@ -516,8 +694,24 @@ export default function App() {
   const [cartOpen, setCartOpen] = useState(false)
   const [checkoutOpen, setCheckoutOpen] = useState(false)
   const [adminOpen, setAdminOpen] = useState(false)
+  const [quoteOpen, setQuoteOpen] = useState(false)
+  const [query, setQuery] = useState('')
+  const [activeColor, setActiveColor] = useState(null)
 
   const cartCount = useMemo(() => cart.reduce((sum, it) => sum + it.quantity, 0), [cart])
+
+  const colors = useMemo(() => Array.from(new Set(products.map((p) => p.color))), [products])
+
+  const filteredProducts = useMemo(() => {
+    return products.filter((p) => {
+      const matchesQuery =
+        query.trim() === '' ||
+        p.name.toLowerCase().includes(query.toLowerCase()) ||
+        p.slogan.toLowerCase().includes(query.toLowerCase())
+      const matchesColor = activeColor === null || p.color === activeColor
+      return matchesQuery && matchesColor
+    })
+  }, [products, query, activeColor])
 
   function addToCart(item) {
     setCart([...cart, item])
@@ -532,20 +726,30 @@ export default function App() {
     <div className="app">
       <Header
         cartCount={cartCount}
+        query={query}
+        onQueryChange={setQuery}
         onCartClick={() => setCartOpen(true)}
         onAdminClick={() => setAdminOpen(true)}
+        onQuoteClick={() => setQuoteOpen(true)}
       />
 
       <Hero />
+      <TrustBadges />
       <TierBoard />
 
       <section id="catalogue" className="catalogue">
         <h2 className="section-title">La collection</h2>
-        <div className="product-grid">
-          {products.map((p) => (
-            <ProductCard key={p.id} product={p} onAdd={addToCart} cartCount={cartCount} />
-          ))}
-        </div>
+        <FilterBar colors={colors} activeColor={activeColor} onSelect={setActiveColor} />
+
+        {filteredProducts.length === 0 ? (
+          <p className="empty-state">Aucun modèle ne correspond à ta recherche.</p>
+        ) : (
+          <div className="product-grid">
+            {filteredProducts.map((p) => (
+              <ProductCard key={p.id} product={p} onAdd={addToCart} cartCount={cartCount} />
+            ))}
+          </div>
+        )}
       </section>
 
       <footer className="footer">
@@ -578,13 +782,16 @@ export default function App() {
         setProducts={setProducts}
       />
 
-      {(cartOpen || checkoutOpen || adminOpen) && (
+      <QuoteModal open={quoteOpen} onClose={() => setQuoteOpen(false)} products={products} />
+
+      {(cartOpen || checkoutOpen || adminOpen || quoteOpen) && (
         <div
           className="backdrop"
           onClick={() => {
             setCartOpen(false)
             setCheckoutOpen(false)
             setAdminOpen(false)
+            setQuoteOpen(false)
           }}
         />
       )}
