@@ -446,3 +446,17 @@ button {
     flex-direction: column;
   }
 }
+/* ===== Ajouts : recherche, badges confiance, filtre couleur, devis ===== */
+.header-search { flex: 1; min-width: 0; margin: 0 0.75rem; }
+.header-search input { width: 100%; padding: 0.5rem 0.75rem; border-radius: 999px; border: 1px solid rgba(0,0,0,0.15); font-size: 0.85rem; }
+.trust-badges { display: flex; flex-wrap: wrap; gap: 0.5rem 1rem; justify-content: center; padding: 0.75rem 1rem; font-size: 0.8rem; opacity: 0.85; }
+.trust-badge { display: inline-flex; align-items: center; gap: 0.35rem; white-space: nowrap; }
+.filter-bar { display: flex; gap: 0.5rem; overflow-x: auto; padding: 0.5rem 0 1rem; -webkit-overflow-scrolling: touch; }
+.filter-chip { flex-shrink: 0; border: 1px solid rgba(0,0,0,0.15); border-radius: 999px; padding: 0.4rem 0.9rem; background: transparent; font-size: 0.8rem; display: inline-flex; align-items: center; gap: 0.4rem; }
+.filter-chip-active { border-color: #E8590C; background: rgba(232,89,12,0.1); font-weight: 600; }
+.filter-swatch { width: 16px; height: 16px; border-radius: 50%; display: inline-block; border: 1px solid rgba(0,0,0,0.2); }
+.price-range { font-size: 0.85rem; font-weight: 600; opacity: 0.8; margin: 0.25rem 0 0.5rem; }
+@media (max-width: 640px) {
+  .header-inner { flex-wrap: wrap; }
+  .header-search { order: 3; flex: 1 1 100%; margin: 0.5rem 0 0; }
+}
